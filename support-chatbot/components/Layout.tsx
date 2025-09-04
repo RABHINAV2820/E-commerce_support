@@ -14,9 +14,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   
   return (
     <ChatProvider>
-      <div>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         <SiteHeader />
-        {children}
+        <main style={{ flex: 1 }}>
+          {children}
+        </main>
         <SiteFooter />
         {shouldShowSupportWidget && <SupportWidget />}
       </div>

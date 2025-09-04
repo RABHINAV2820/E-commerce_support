@@ -2,6 +2,9 @@
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
+  min-height: calc(100vh - 200px); /* Ensure minimum height to push footer down */
+  display: flex;
+  flex-direction: column;
 }
 
 .header {
@@ -27,6 +30,10 @@
   font-size: 1.2rem;
   color: #64748b;
   padding: 40px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dashboard {
@@ -34,6 +41,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   min-height: 600px;
+  flex: 1;
 }
 
 .escalationsPanel {
