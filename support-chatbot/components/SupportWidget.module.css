@@ -1,0 +1,105 @@
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 52px;
+  height: 52px;
+  background: #111;
+  color: #fff;
+  border-radius: 50%;
+  border: none;
+  font-size: 22px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.panel {
+  position: fixed;
+  right: 16px;
+  bottom: 80px;
+  width: 360px;
+  max-width: calc(100% - 32px);
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  transform: scale(0.98);
+  opacity: 0;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.panelTall .body { height: 560px; }
+
+.panelFull {
+  width: min(720px, 94vw);
+  height: min(80vh, 720px);
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.22);
+}
+
+.header {
+  height: 48px;
+  padding: 0 12px;
+  background: #111827;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #0b1220;
+}
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title {
+  font-weight: 700;
+}
+
+.controls { display: flex; gap: 6px; }
+.iconBtn { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+
+.body { display: flex; flex-direction: column; height: 420px; background: #f6f7f9; }
+.messages { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; }
+.user { justify-content: flex-end; }
+.bot { justify-content: flex-start; }
+.bubble { max-width: 80%; padding: 10px 12px; border-radius: 14px; line-height: 1.3; }
+.bubbleUser { background: #111; color: #fff; border-bottom-right-radius: 4px; }
+.bubbleBot { background: #f2f2f2; color: #111; border-bottom-left-radius: 4px; }
+.quickBar { display: flex; gap: 8px; padding: 0 12px 8px; flex-wrap: wrap; }
+.quickBtn { background: #f6f6f6; border: 1px solid #e5e5e5; border-radius: 999px; padding: 6px 10px; cursor: pointer; }
+.inputBar { display: flex; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid #e5e7eb; background: #fff; }
+.input { flex: 1; border: 1px solid #ddd; border-radius: 10px; padding: 10px 12px; }
+.send { background: #2563eb; color: #fff; border: none; border-radius: 10px; padding: 10px 14px; }
+
+.resizeHandle {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  opacity: 0.5;
+}
+
+.visible { opacity: 1; transform: scale(1); }
+
+@media (max-width: 768px) {
+  .panel { right: 12px; left: 12px; width: auto; }
+}
+

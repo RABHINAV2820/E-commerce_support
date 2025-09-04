@@ -1,0 +1,16 @@
+.header { position: sticky; top: 0; z-index: 20; background: var(--hdr-bg, #ffffffcc); backdrop-filter: blur(6px); border-bottom: 1px solid #e5e7eb; }
+.inner { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
+.brand { font-weight: 800; font-size: 20px; color: var(--text, #0f172a); }
+.searchWrap { flex: 1; display: flex; }
+.search { width: 100%; border: 1px solid #e5e7eb; border-radius: 999px; padding: 10px 14px; background: #fff; }
+.nav { display: flex; align-items: center; gap: 10px; }
+.link { color: var(--text, #0f172a); }
+.iconBtn { background: #111; color: #fff; border: none; border-radius: 8px; padding: 8px 10px; }
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="dark"] .header { --hdr-bg: #0b1220cc; }
+  :root[data-theme="dark"] .brand { --text: #e5e7eb; }
+  :root[data-theme="dark"] .link { --text: #e5e7eb; }
+  :root[data-theme="dark"] .search { background: #111827; color: #e5e7eb; border-color: #374151; }
+}
+

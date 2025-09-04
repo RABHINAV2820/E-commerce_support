@@ -1,0 +1,27 @@
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+@media (max-width: 1024px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+.card { border: 1px solid #eee; border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 6px 16px rgba(0,0,0,0.06); transition: transform 180ms ease, box-shadow 180ms ease; }
+.card:hover { transform: scale(1.05); box-shadow: 0 12px 26px rgba(0,0,0,0.12); }
+
+.thumb { height: 140px; background: linear-gradient(135deg, #f6f6f6, #eaeaea); }
+
+.info { padding: 12px; }
+
+.name { font-weight: 600; margin-bottom: 8px; }
+
+.meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.actions { display: flex; gap: 8px; }
+
+.price { font-weight: 700; }
+
+.add { background: #2563eb; color: #fff; border: none; padding: 8px 12px; border-radius: 8px; }
+.ghost { background: transparent; border: 1px solid #e5e7eb; padding: 8px 12px; border-radius: 8px; }
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="dark"] .card { background: #0b1220; border-color: #111827; }
+  :root[data-theme="dark"] .thumb { background: linear-gradient(135deg, #0f172a, #0b1220); }
+  :root[data-theme="dark"] .ghost { border-color: #374151; color: #e5e7eb; }
+}
+

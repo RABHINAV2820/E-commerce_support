@@ -1,0 +1,11 @@
+.footer { border-top: 1px solid #e5e7eb; background: #fff; }
+.inner { max-width: 1100px; margin: 0 auto; padding: 24px 16px; text-align: center; }
+.links { display: flex; gap: 16px; justify-content: center; margin-bottom: 8px; }
+.link { color: #6b7280; }
+.copy { color: #6b7280; font-size: 14px; }
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="dark"] .footer { background: #0b1220; border-color: #111827; }
+  :root[data-theme="dark"] .link, :root[data-theme="dark"] .copy { color: #9ca3af; }
+}
+
