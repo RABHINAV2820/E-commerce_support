@@ -6,6 +6,7 @@
 .nav { display: flex; align-items: center; gap: 10px; }
 .link { color: var(--text, #0f172a); }
 .iconBtn { background: #111; color: #fff; border: none; border-radius: 8px; padding: 8px 10px; }
+.logoutBtn { background: #dc2626; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme="dark"] .header { --hdr-bg: #0b1220cc; }

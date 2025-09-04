@@ -9,9 +9,7 @@ type Intent = "none" | "track" | "refundAwaitId" | "refundAwaitReason";
 export default function SupportWidget() {
   const [mode, setMode] = useState<ChatMode>("min");
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([
-    { from: "bot", text: "Hi! I’m ShopMate. How can I help today?" }
-  ]);
+  const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
@@ -27,6 +25,18 @@ export default function SupportWidget() {
     const s = typeof window !== "undefined" ? localStorage.getItem("chatSize") : null;
     if (s) {
       try { setSize(JSON.parse(s)); } catch {}
+    }
+
+    // Check for chat context from orders page
+    const context = typeof window !== "undefined" ? sessionStorage.getItem('chatContext') : null;
+    if (context) {
+      try {
+        const { message } = JSON.parse(context);
+        setMessages([{ from: "bot", text: message }]);
+        sessionStorage.removeItem('chatContext');
+      } catch {}
+    } else {
+      setMessages([{ from: "bot", text: "Hi! I'm ShopMate. How can I help today?" }]);
     }
   }, []);
 
@@ -217,6 +227,7 @@ export default function SupportWidget() {
           aria-label="Open support"
           className={styles.fab}
           onClick={() => setMode("dock")}
+          data-chat-widget
         >
           💬
         </button>

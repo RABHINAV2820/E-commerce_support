@@ -19,11 +19,12 @@ create table if not exists public.refunds (
 -- Conversations table
 create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
+  session_id text,
+  role text not null check (role in ('user', 'bot')),
   user_query text,
   ai_reply text,
-  session_id text,
-  state text,
   escalation_flag boolean not null default false,
+  state text,
   created_at timestamptz not null default now()
 );
 

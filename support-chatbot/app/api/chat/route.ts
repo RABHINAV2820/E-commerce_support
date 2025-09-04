@@ -112,8 +112,21 @@ export async function POST(req: NextRequest) {
       return (data?.state as string) || null;
     }
 
-    async function setState(state: string | null, user_query?: string, ai_reply?: string) {
-      await supabase.from("conversations").insert({ session_id: cookie, state, user_query: user_query || null, ai_reply: ai_reply || null });
+    async function logMessage(role: 'user' | 'bot', content: string, state?: string | null, escalation?: boolean) {
+      const insertData: any = {
+        session_id: cookie,
+        role,
+        escalation_flag: escalation || false,
+        state: state || null
+      };
+      
+      if (role === 'user') {
+        insertData.user_query = content;
+      } else {
+        insertData.ai_reply = content;
+      }
+      
+      await supabase.from("conversations").insert(insertData);
     }
 
     function extractOrderId(text: string): string | null {
@@ -131,10 +144,13 @@ export async function POST(req: NextRequest) {
       return data;
     }
 
+    // Log user message
+    await logMessage('user', query);
+
     // 1) FAQ
     const faqAns = await tryFaq(query);
     if (faqAns) {
-      await setState(null, query, faqAns);
+      await logMessage('bot', faqAns);
       return respond({ reply: faqAns, source: "faq" });
     }
 
@@ -143,11 +159,11 @@ export async function POST(req: NextRequest) {
       // If user simply says 'support', confirm first; otherwise escalate directly
       if (/\bsupport\b/i.test(query) && !/(human|agent|escalate)/i.test(query)) {
         const msg = "Do I need to connect you with an agent?";
-        await setState("awaiting_escalation_confirm", query, msg);
+        await logMessage('bot', msg, "awaiting_escalation_confirm");
         return respond({ reply: msg, source: "escalation_confirm" });
       }
       const msg = "An agent will connect with you shortly.";
-      await supabase.from("conversations").insert({ session_id: cookie, user_query: query, ai_reply: msg, escalation_flag: true, state: null });
+      await logMessage('bot', msg, null, true);
       return respond({ reply: msg, source: "escalation" });
     }
 
@@ -157,22 +173,22 @@ export async function POST(req: NextRequest) {
       const id = extractOrderId(query);
       if (!id) {
         const msg = "Please provide a valid order ID (digits).";
-        await setState("awaiting_order_id", query, msg);
+        await logMessage('bot', msg, "awaiting_order_id");
         return respond({ reply: msg, source: "order_state" });
       }
       try {
         const order = await lookupOrder(id);
         if (!order) {
-          const msg = "I couldn’t find that order. Please re-check your ID or escalate to support.";
-          await setState(null, query, msg);
+          const msg = "Invalid order ID. Please re-check or escalate.";
+          await logMessage('bot', msg, "awaiting_order_id");
           return respond({ reply: msg, source: "order_not_found" });
         }
         const reply = `Order ${id} is currently ${order.status}. Expected delivery: ${order.expected_delivery ?? "N/A"}.`;
-        await setState(null, query, reply);
+        await logMessage('bot', reply);
         return respond({ reply, source: "order_status" });
       } catch (e) {
         const msg = "Our systems are facing issues. Please try again later.";
-        await setState(null, query, msg);
+        await logMessage('bot', msg);
         return respond({ reply: msg, source: "error" }, 500);
       }
     }
@@ -180,16 +196,16 @@ export async function POST(req: NextRequest) {
     if (currentState === "awaiting_escalation_confirm") {
       if (/\b(yes|yep|yeah|please)\b/i.test(query)) {
         const msg = "An agent will connect with you shortly.";
-        await supabase.from("conversations").insert({ session_id: cookie, user_query: query, ai_reply: msg, escalation_flag: true, state: null });
+        await logMessage('bot', msg, null, true);
         return respond({ reply: msg, source: "escalation_yes" });
       }
       if (/\b(no|nope|not now)\b/i.test(query)) {
         const msg = "Sure. Tell me your query.";
-        await setState(null, query, msg);
+        await logMessage('bot', msg);
         return respond({ reply: msg, source: "escalation_no" });
       }
       const msg = "Please reply with yes or no.";
-      await setState("awaiting_escalation_confirm", query, msg);
+      await logMessage('bot', msg, "awaiting_escalation_confirm");
       return respond({ reply: msg, source: "escalation_confirm_repeat" });
     }
 
@@ -198,22 +214,22 @@ export async function POST(req: NextRequest) {
       const id = extractOrderId(query);
       if (!id) {
         const msg = "Sure! Please provide your order ID.";
-        await setState("awaiting_order_id", query, msg);
+        await logMessage('bot', msg, "awaiting_order_id");
         return respond({ reply: msg, source: "order_request_id" });
       }
       try {
         const order = await lookupOrder(id);
         if (!order) {
-          const msg = "I couldn’t find that order. Please re-check your ID or escalate to support.";
-          await setState(null, query, msg);
+          const msg = "Invalid order ID. Please re-check or escalate.";
+          await logMessage('bot', msg, "awaiting_order_id");
           return respond({ reply: msg, source: "order_not_found" });
         }
         const reply = `Order ${id} is currently ${order.status}. Expected delivery: ${order.expected_delivery ?? "N/A"}.`;
-        await setState(null, query, reply);
+        await logMessage('bot', reply);
         return respond({ reply, source: "order_status" });
       } catch (e) {
         const msg = "Our systems are facing issues. Please try again later.";
-        await setState(null, query, msg);
+        await logMessage('bot', msg);
         return respond({ reply: msg, source: "error" }, 500);
       }
     }
@@ -225,7 +241,7 @@ export async function POST(req: NextRequest) {
         const order = await lookupOrder(onlyDigits);
         if (order) {
           const reply = `Order ${onlyDigits} is currently ${order.status}. Expected delivery: ${order.expected_delivery ?? "N/A"}.`;
-          await setState(null, query, reply);
+          await logMessage('bot', reply);
           return respond({ reply, source: "order_status" });
         }
       } catch {}
@@ -242,8 +258,8 @@ export async function POST(req: NextRequest) {
 
     // 4) Fallback
     const ai = await gptFallback(query);
-    const reply = ai || "I couldn’t find that. Would you like to talk to an agent?";
-    await setState(null, query, reply);
+    const reply = ai || "I couldn't find that. Would you like to talk to an agent?";
+    await logMessage('bot', reply);
     return respond({ reply, source: ai ? "gpt" : "fallback" });
   } catch (e: any) {
     return NextResponse.json({ reply: "Our systems are facing issues. Please try again later.", error: e?.message || "Unknown error" }, { status: 500 });

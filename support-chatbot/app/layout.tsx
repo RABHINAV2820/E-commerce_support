@@ -2,6 +2,7 @@ import "../styles/globals.css";
 import { ReactNode } from "react";
 import ThemeProvider from "@/components/ThemeProvider";
 import Layout from "@/components/Layout";
+import AuthGuard from "../components/AuthGuard";
 
 export const metadata = {
   title: "E-commerce Support Chatbot",
@@ -13,7 +14,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <ThemeProvider>
-          <Layout>{children}</Layout>
+          <AuthGuard>
+            <Layout>{children}</Layout>
+          </AuthGuard>
         </ThemeProvider>
       </body>
     </html>
