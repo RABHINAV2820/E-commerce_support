@@ -1,5 +1,4 @@
 import ProductGrid from "@/components/ProductGrid";
-import SupportWidget from "@/components/SupportWidget";
 
 export default function HomePage() {
   return (
@@ -11,7 +10,6 @@ export default function HomePage() {
         </div>
         <ProductGrid />
       </section>
-      <SupportWidget />
     </main>
   );
 }

@@ -93,27 +93,37 @@ export async function POST(req: NextRequest) {
     const cookie = existing || crypto.randomUUID();
     const setCookieNeeded = !existing;
 
+    // Thread ID for grouping conversation messages
+    const threadId = req.cookies.get("chat_thread_id")?.value || crypto.randomUUID();
+    const setThreadCookieNeeded = !req.cookies.get("chat_thread_id")?.value;
+
     function respond(payload: any, init?: number) {
       const res = NextResponse.json(payload, { status: init ?? 200 });
       if (setCookieNeeded) {
         res.cookies.set("chat_session_id", cookie, { path: "/", maxAge: 60 * 60 * 24 * 30, sameSite: "lax" });
       }
+      if (setThreadCookieNeeded) {
+        res.cookies.set("chat_thread_id", threadId, { path: "/", maxAge: 60 * 60 * 24 * 30, sameSite: "lax" });
+      }
       return res;
     }
 
     async function getState(): Promise<string | null> {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("conversations")
         .select("state")
-        .eq("session_id", cookie)
+        .eq("thread_id", threadId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      
+      console.log('getState Debug:', { threadId, data, error, foundState: data?.state });
       return (data?.state as string) || null;
     }
 
-    async function logMessage(role: 'user' | 'bot', content: string, state?: string | null, escalation?: boolean) {
+    async function logMessage(role: 'user' | 'bot', content: string, state?: string | null, escalation?: boolean, metadata?: any) {
       const insertData: any = {
+        thread_id: threadId,
         session_id: cookie,
         role,
         escalation_flag: escalation || false,
@@ -126,7 +136,16 @@ export async function POST(req: NextRequest) {
         insertData.ai_reply = content;
       }
       
-      await supabase.from("conversations").insert(insertData);
+      // Add metadata if provided (e.g., order context)
+      if (metadata) {
+        insertData.metadata = metadata;
+      }
+      
+      console.log('Logging message:', { role, content, state, escalation, threadId, metadata });
+      const { error } = await supabase.from("conversations").insert(insertData);
+      if (error) {
+        console.error('Error logging message:', error);
+      }
     }
 
     function extractOrderId(text: string): string | null {
@@ -146,29 +165,66 @@ export async function POST(req: NextRequest) {
 
     // Log user message
     await logMessage('user', query);
+    
+    // 1) State machine handling (check state first - HIGHEST PRIORITY)
+    const currentState = await getState();
+    
+    // Debug logging
+    console.log('Chat API Debug:', {
+      query,
+      threadId,
+      sessionId: cookie,
+      currentState
+    });
+    
+    // Handle escalation confirmation state
+    if (currentState === "confirm_escalation") {
+      console.log('Processing escalation confirmation for query:', query);
+      
+      // Check for affirmative responses
+      if (/\b(yes|y|yeah|yep|please do|ok|okay|sure|connect|agent)\b/i.test(query)) {
+        console.log('User confirmed escalation - proceeding with escalation');
+        const msg = "An agent will connect with you shortly.";
+        await logMessage('bot', msg, null, true); // Reset state to null, set escalation=true
+        return respond({ reply: msg, source: "escalation_yes" });
+      }
+      
+      // Check for negative responses
+      if (/\b(no|nope|not now|not yet|cancel|never mind)\b/i.test(query)) {
+        console.log('User declined escalation');
+        const msg = "No problem. I'm here if you need me.";
+        await logMessage('bot', msg, null); // Reset state to null
+        return respond({ reply: msg, source: "escalation_no" });
+      }
+      
+      // Unclear response - ask for clarification
+      console.log('User response unclear, asking for clarification');
+      const msg = "Please reply with yes or no.";
+      await logMessage('bot', msg, "confirm_escalation"); // Keep state as confirm_escalation
+      return respond({ reply: msg, source: "escalation_confirm_repeat" });
+    }
 
-    // 1) FAQ
+    // 2) FAQ (only if not in a state machine)
     const faqAns = await tryFaq(query);
     if (faqAns) {
       await logMessage('bot', faqAns);
       return respond({ reply: faqAns, source: "faq" });
     }
 
-    // Escalation keywords (support intent)
-    if (/(human support|talk to agent|more support|escalate|support)/i.test(query)) {
-      // If user simply says 'support', confirm first; otherwise escalate directly
-      if (/\bsupport\b/i.test(query) && !/(human|agent|escalate)/i.test(query)) {
-        const msg = "Do I need to connect you with an agent?";
-        await logMessage('bot', msg, "awaiting_escalation_confirm");
-        return respond({ reply: msg, source: "escalation_confirm" });
-      }
-      const msg = "An agent will connect with you shortly.";
-      await logMessage('bot', msg, null, true);
-      return respond({ reply: msg, source: "escalation" });
+    // 3) Escalation keywords (support intent)
+    const escalationPhrases = ["need support", "talk to human", "talk to agent", "escalate", "more support", "human support"];
+    const isEscalationRequest = escalationPhrases.some(phrase => 
+      query.toLowerCase().includes(phrase.toLowerCase())
+    ) || /(human support|talk to agent|more support|escalate|support)/i.test(query);
+    
+    if (isEscalationRequest) {
+      console.log('Escalation keyword detected:', query);
+      // Always confirm first for escalation requests
+      console.log('Setting confirm_escalation state');
+      const msg = "Do you want me to connect you with an agent?";
+      await logMessage('bot', msg, "confirm_escalation");
+      return respond({ reply: msg, source: "escalation_confirm" });
     }
-
-    // 2) State machine handling
-    const currentState = await getState();
     if (currentState === "awaiting_order_id") {
       const id = extractOrderId(query);
       if (!id) {
@@ -180,33 +236,17 @@ export async function POST(req: NextRequest) {
         const order = await lookupOrder(id);
         if (!order) {
           const msg = "Invalid order ID. Please re-check or escalate.";
-          await logMessage('bot', msg, "awaiting_order_id");
+          await logMessage('bot', msg, "awaiting_order_id"); // Keep state as awaiting_order_id
           return respond({ reply: msg, source: "order_not_found" });
         }
         const reply = `Order ${id} is currently ${order.status}. Expected delivery: ${order.expected_delivery ?? "N/A"}.`;
-        await logMessage('bot', reply);
+        await logMessage('bot', reply, null); // Reset state to null
         return respond({ reply, source: "order_status" });
       } catch (e) {
         const msg = "Our systems are facing issues. Please try again later.";
-        await logMessage('bot', msg);
+        await logMessage('bot', msg, "awaiting_order_id"); // Keep state as awaiting_order_id
         return respond({ reply: msg, source: "error" }, 500);
       }
-    }
-
-    if (currentState === "awaiting_escalation_confirm") {
-      if (/\b(yes|yep|yeah|please)\b/i.test(query)) {
-        const msg = "An agent will connect with you shortly.";
-        await logMessage('bot', msg, null, true);
-        return respond({ reply: msg, source: "escalation_yes" });
-      }
-      if (/\b(no|nope|not now)\b/i.test(query)) {
-        const msg = "Sure. Tell me your query.";
-        await logMessage('bot', msg);
-        return respond({ reply: msg, source: "escalation_no" });
-      }
-      const msg = "Please reply with yes or no.";
-      await logMessage('bot', msg, "awaiting_escalation_confirm");
-      return respond({ reply: msg, source: "escalation_confirm_repeat" });
     }
 
     // 3) Detect order tracking intent

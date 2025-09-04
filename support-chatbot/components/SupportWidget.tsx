@@ -1,48 +1,129 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import styles from "./SupportWidget.module.css";
+import { useChatContext } from "./ChatContext";
 
 type ChatMode = "min" | "dock" | "full";
 
 type Intent = "none" | "track" | "refundAwaitId" | "refundAwaitReason";
 
 export default function SupportWidget() {
-  const [mode, setMode] = useState<ChatMode>("min");
+  const { mode, setMode, orderContext, setOrderContext } = useChatContext();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<{ from: "user" | "bot"; text: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const resizingRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
   const [intent, setIntent] = useState<Intent>("none");
   const refundOrderIdRef = useRef<string | null>(null);
+  const contextProcessedRef = useRef<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
-  // Restore persisted mode and default to dock on mobile
+  // Handle order context from ChatProvider
   useEffect(() => {
-    const m = (typeof window !== "undefined" && localStorage.getItem("chatMode")) as ChatMode | null;
-    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
-    setMode(m || (isMobile ? "dock" : "min"));
-    const s = typeof window !== "undefined" ? localStorage.getItem("chatSize") : null;
-    if (s) {
-      try { setSize(JSON.parse(s)); } catch {}
+    if (orderContext && !contextProcessedRef.current) {
+      console.log('SupportWidget: Processing order context:', orderContext);
+      setMessages([{ from: "bot", text: orderContext.message }]);
+      setMode("dock");
+      contextProcessedRef.current = true;
+      setOrderContext(null); // Clear context after processing
+      
+      // Focus input and scroll to bottom after a short delay
+      setTimeout(() => {
+        inputRef.current?.focus();
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
     }
+  }, [orderContext, setMode, setOrderContext]);
 
-    // Check for chat context from orders page
+  // Initialize component and restore persisted state
+  useEffect(() => {
+    if (isInitialized) return; // Prevent re-initialization
+    
+    console.log('SupportWidget: Initializing component, contextProcessed:', contextProcessedRef.current);
+    
+    // Check for legacy chat context from sessionStorage (fallback)
     const context = typeof window !== "undefined" ? sessionStorage.getItem('chatContext') : null;
-    if (context) {
+    console.log('SupportWidget: Checking for legacy chat context:', context);
+    
+    if (context && !contextProcessedRef.current) {
       try {
         const { message } = JSON.parse(context);
+        console.log('SupportWidget: Found legacy chat context, setting mode to dock:', message);
         setMessages([{ from: "bot", text: message }]);
         sessionStorage.removeItem('chatContext');
-      } catch {}
-    } else {
-      setMessages([{ from: "bot", text: "Hi! I'm ShopMate. How can I help today?" }]);
+        contextProcessedRef.current = true;
+        setMode("dock");
+        console.log('SupportWidget: Mode set to dock due to legacy context');
+        setIsInitialized(true);
+        return;
+      } catch (e) {
+        console.error('SupportWidget: Error parsing legacy chat context:', e);
+      }
     }
-  }, []);
+
+    // Only restore from localStorage if we haven't processed context
+    if (!contextProcessedRef.current) {
+      const m = (typeof window !== "undefined" && localStorage.getItem("chatMode")) as ChatMode | null;
+      const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+      const initialMode = m || (isMobile ? "dock" : "min");
+      console.log('SupportWidget: Setting initial mode:', initialMode, 'from localStorage:', m, 'isMobile:', isMobile);
+      setMode(initialMode);
+      
+      const s = typeof window !== "undefined" ? localStorage.getItem("chatSize") : null;
+      if (s) {
+        try { setSize(JSON.parse(s)); } catch {}
+      }
+
+      // Set default message if no context (only if not processing order context)
+      if (!contextProcessedRef.current) {
+        setMessages([{ from: "bot", text: "Hi! I'm ShopMate. How can I help today?" }]);
+      }
+    }
+    
+    setIsInitialized(true);
+  }, [isInitialized, setMode]);
+
+  // Listen for custom event to open chat widget (separate useEffect)
+  useEffect(() => {
+    const handleOpenChat = (event: CustomEvent) => {
+      console.log('SupportWidget: Received openChatWidget event:', event.detail);
+      const { orderId, chatContext } = event.detail;
+      
+      if (chatContext) {
+        console.log('SupportWidget: Setting order context from custom event:', chatContext);
+        setMessages([{ from: "bot", text: chatContext.message }]);
+        contextProcessedRef.current = true;
+        setMode("dock");
+        
+        // Focus input and scroll to bottom after a short delay
+        setTimeout(() => {
+          inputRef.current?.focus();
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      } else {
+        contextProcessedRef.current = true;
+        setMode("dock");
+      }
+      console.log('SupportWidget: Mode set to dock due to custom event');
+    };
+
+    window.addEventListener('openChatWidget', handleOpenChat as EventListener);
+    
+    return () => {
+      window.removeEventListener('openChatWidget', handleOpenChat as EventListener);
+    };
+  }, [setMode]);
 
   // Persist mode
   useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("chatMode", mode);
+    console.log('SupportWidget: Mode changed to:', mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("chatMode", mode);
+      console.log('SupportWidget: Saved mode to localStorage:', mode);
+    }
   }, [mode]);
 
   useEffect(() => {
@@ -221,13 +302,12 @@ export default function SupportWidget() {
     }
   }
   return (
-    <>
+    <div className="chat-widget" data-chat-widget>
       {mode === "min" && (
         <button
           aria-label="Open support"
           className={styles.fab}
           onClick={() => setMode("dock")}
-          data-chat-widget
         >
           💬
         </button>
@@ -268,6 +348,7 @@ export default function SupportWidget() {
             </div>
             <form className={styles.inputBar} onSubmit={handleSubmit} role="search">
               <input
+                ref={inputRef}
                 className={styles.input}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -337,6 +418,7 @@ export default function SupportWidget() {
               </div>
               <form className={styles.inputBar} onSubmit={handleSubmit} role="search">
                 <input
+                  ref={inputRef}
                   className={styles.input}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -349,7 +431,7 @@ export default function SupportWidget() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 

@@ -47,21 +47,20 @@ export default function OrdersPage() {
   }
 
   function handleRequestSupport(orderId: string) {
-    // Open chat widget with order context
-    const chatWidget = document.querySelector('[data-chat-widget]') as HTMLElement;
-    if (chatWidget) {
-      // Trigger chat widget to open
-      const chatButton = chatWidget.querySelector('button') as HTMLElement;
-      if (chatButton) {
-        chatButton.click();
-      }
-    }
+    console.log('OrdersPage: Requesting support for order:', orderId);
     
-    // Store order context for chat
-    sessionStorage.setItem('chatContext', JSON.stringify({
+    // Open chat directly on current page with order context
+    const chatContext = {
       orderId,
       message: `Hi, I see you're asking about Order #${orderId}. How can I help you?`
-    }));
+    };
+    
+    // Dispatch custom event to open chat widget with order context
+    const openChatEvent = new CustomEvent('openChatWidget', {
+      detail: { orderId, chatContext }
+    });
+    console.log('OrdersPage: Dispatching openChatWidget event with context:', chatContext);
+    window.dispatchEvent(openChatEvent);
   }
 
   if (loading) {

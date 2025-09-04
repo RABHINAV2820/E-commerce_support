@@ -7,6 +7,7 @@ import styles from "./admin.module.css";
 
 type Escalation = {
   id: string;
+  thread_id: string;
   session_id: string;
   user_query: string;
   ai_reply: string;
@@ -14,10 +15,19 @@ type Escalation = {
   resolution_status?: string;
 };
 
+type ConversationMessage = {
+  id: string;
+  role: string;
+  user_query: string | null;
+  ai_reply: string | null;
+  escalation_flag: boolean;
+  created_at: string;
+};
+
 export default function AdminDashboard() {
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [selectedEscalation, setSelectedEscalation] = useState<Escalation | null>(null);
-  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -33,14 +43,35 @@ export default function AdminDashboard() {
 
   async function fetchEscalations() {
     try {
-      const { data, error } = await supabase
+      // Get unique thread_ids that have escalations
+      const { data: escalationThreads, error: threadError } = await supabase
         .from("conversations")
-        .select("*")
+        .select("thread_id")
         .eq("escalation_flag", true)
         .order("created_at", { ascending: false });
       
-      if (error) throw error;
-      setEscalations(data || []);
+      if (threadError) throw threadError;
+      
+      // Get the first escalation message from each thread
+      const uniqueThreads = [...new Set(escalationThreads?.map(t => t.thread_id) || [])];
+      const escalationsData = [];
+      
+      for (const threadId of uniqueThreads) {
+        const { data: threadData, error } = await supabase
+          .from("conversations")
+          .select("*")
+          .eq("thread_id", threadId)
+          .eq("escalation_flag", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (!error && threadData) {
+          escalationsData.push(threadData);
+        }
+      }
+      
+      setEscalations(escalationsData);
     } catch (error) {
       console.error("Error fetching escalations:", error);
     } finally {
@@ -48,12 +79,12 @@ export default function AdminDashboard() {
     }
   }
 
-  async function fetchConversationHistory(sessionId: string) {
+  async function fetchConversationHistory(threadId: string) {
     try {
       const { data, error } = await supabase
         .from("conversations")
-        .select("*")
-        .eq("session_id", sessionId)
+        .select("id, role, user_query, ai_reply, escalation_flag, created_at")
+        .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
       
       if (error) throw error;
@@ -85,7 +116,7 @@ export default function AdminDashboard() {
 
   function handleEscalationClick(escalation: Escalation) {
     setSelectedEscalation(escalation);
-    fetchConversationHistory(escalation.session_id);
+    fetchConversationHistory(escalation.thread_id);
   }
 
   if (loading) {
@@ -114,7 +145,7 @@ export default function AdminDashboard() {
                 onClick={() => handleEscalationClick(escalation)}
               >
                 <div className={styles.escalationHeader}>
-                  <span className={styles.sessionId}>Session: {escalation.session_id?.slice(0, 8) || 'N/A'}...</span>
+                  <span className={styles.sessionId}>Thread: {escalation.thread_id?.slice(0, 8) || 'N/A'}...</span>
                   <span className={styles.timestamp}>
                     {new Date(escalation.created_at).toLocaleString()}
                   </span>
@@ -149,17 +180,20 @@ export default function AdminDashboard() {
             
             <div className={styles.conversationHistory}>
               {conversationHistory.map((msg, index) => (
-                <div key={index} className={styles.message}>
+                <div key={msg.id} className={styles.message}>
                   <div className={styles.messageHeader}>
                     <span className={styles.messageType}>
-                      {msg.user_query ? "User" : "Bot"}
+                      {msg.role === 'user' ? "User" : "Bot"}
                     </span>
                     <span className={styles.messageTime}>
                       {new Date(msg.created_at).toLocaleString()}
                     </span>
+                    {msg.escalation_flag && (
+                      <span className={styles.escalationBadge}>ESCALATED</span>
+                    )}
                   </div>
                   <div className={styles.messageContent}>
-                    {msg.user_query || msg.ai_reply}
+                    {msg.role === 'user' ? msg.user_query : msg.ai_reply}
                   </div>
                 </div>
               ))}
